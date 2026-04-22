@@ -4,11 +4,25 @@ import asyncio
 from io import BytesIO
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image, ImageDraw
-from picamera2 import Picamera2
+
+try:
+    from picamera2 import Picamera2
+except ModuleNotFoundError as exc:
+    raise ModuleNotFoundError(
+        "picamera2 is not installed. On Raspberry Pi OS, install system package "
+        "'python3-picamera2' and use a venv created with --system-site-packages."
+    ) from exc
 
 
 app = FastAPI(title="Eye Module Pi")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 camera: Picamera2 | None = None
 active_websocket: WebSocket | None = None

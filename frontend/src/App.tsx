@@ -1,6 +1,6 @@
 import { type PointerEvent, useEffect, useRef, useState } from 'react';
 
-const websocketUrl = 'ws://localhost:8030/ws';
+const websocketUrl = 'ws://10.0.0.5:8030/ws';
 const controlWebsocketUrl = 'ws://localhost:8020';
 type Direction = 'forward' | 'back' | 'left' | 'right';
 

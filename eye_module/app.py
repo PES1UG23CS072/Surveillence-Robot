@@ -5,9 +5,16 @@ import asyncio
 import cv2
 import numpy as np
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
 
 
 app = FastAPI(title="Eye Module")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 camera: cv2.VideoCapture | None = None
 active_websocket: WebSocket | None = None

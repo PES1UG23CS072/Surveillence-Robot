@@ -4,11 +4,18 @@ import asyncio
 import contextlib
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
 import websockets
 from websockets.exceptions import ConnectionClosed
 
 
 app = FastAPI(title="Broadcaster")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 eye_module_url = "ws://127.0.0.1:3010/ws"
 connected_clients: set[WebSocket] = set()
