@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+from io import BytesIO
 
-import cv2
-import numpy as np
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from PIL import Image, ImageDraw
 from picamera2 import Picamera2
 
 
@@ -40,33 +40,15 @@ async def health() -> dict[str, str]:
 
 
 def build_placeholder_frame(message: str) -> bytes:
-    canvas = np.zeros((720, 1280, 3), dtype=np.uint8)
-    canvas[:] = (18, 24, 38)
-    cv2.rectangle(canvas, (48, 48), (1232, 672), (77, 102, 164), 3)
-    cv2.putText(
-        canvas,
-        "Eye Module",
-        (84, 144),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        2.0,
-        (240, 245, 255),
-        4,
-        cv2.LINE_AA,
-    )
-    cv2.putText(
-        canvas,
-        message,
-        (84, 228),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        1.0,
-        (196, 211, 255),
-        2,
-        cv2.LINE_AA,
-    )
-    success, encoded = cv2.imencode(".jpg", canvas, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
-    if not success:
-        raise RuntimeError("Failed to encode placeholder frame")
-    return encoded.tobytes()
+    image = Image.new("RGB", (1280, 720), (18, 24, 38))
+    draw = ImageDraw.Draw(image)
+    draw.rectangle((48, 48, 1232, 672), outline=(77, 102, 164), width=3)
+    draw.text((84, 144), "Eye Module", fill=(240, 245, 255))
+    draw.text((84, 228), message, fill=(196, 211, 255))
+
+    buffer = BytesIO()
+    image.save(buffer, format="JPEG", quality=90)
+    return buffer.getvalue()
 
 
 def capture_frame_sync() -> bytes:
@@ -81,14 +63,14 @@ def capture_frame_sync() -> bytes:
     if frame is None:
         return build_placeholder_frame("camera frame unavailable")
 
-    # Picamera2 gives RGB888 in this configuration; convert to BGR for OpenCV encoding.
-    frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-
-    success, encoded = cv2.imencode(".jpg", frame_bgr, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
-    if not success:
+    try:
+        image = Image.fromarray(frame)
+        buffer = BytesIO()
+        image.save(buffer, format="JPEG", quality=90)
+    except Exception:
         return build_placeholder_frame("jpeg encoding failed")
 
-    return encoded.tobytes()
+    return buffer.getvalue()
 
 
 async def capture_frame() -> bytes:
