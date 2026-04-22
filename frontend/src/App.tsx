@@ -1,12 +1,18 @@
-import { useEffect, useRef, useState } from 'react';
+import { type PointerEvent, useEffect, useRef, useState } from 'react';
 
 const websocketUrl = 'ws://localhost:8030/ws';
+const controlWebsocketUrl = 'ws://localhost:8020';
+type Direction = 'forward' | 'back' | 'left' | 'right';
 
 export default function App() {
   const [status, setStatus] = useState<'connecting' | 'live' | 'reconnecting'>('connecting');
+  const [controlStatus, setControlStatus] = useState<'connecting' | 'live' | 'reconnecting'>(
+    'connecting',
+  );
   const [frameUrl, setFrameUrl] = useState<string | null>(null);
   const [frameCount, setFrameCount] = useState(0);
   const objectUrlRef = useRef<string | null>(null);
+  const controlSocketRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
     let socket: WebSocket | null = null;
@@ -67,8 +73,101 @@ export default function App() {
     };
   }, []);
 
+  useEffect(() => {
+    let socket: WebSocket | null = null;
+    let reconnectTimer: number | undefined;
+    let disposed = false;
+
+    const connect = () => {
+      setControlStatus((current: 'connecting' | 'live' | 'reconnecting') =>
+        current === 'connecting' ? current : 'reconnecting',
+      );
+      socket = new WebSocket(controlWebsocketUrl);
+      controlSocketRef.current = socket;
+
+      socket.onopen = () => {
+        if (!disposed) {
+          setControlStatus('live');
+        }
+      };
+
+      socket.onclose = () => {
+        if (disposed) {
+          return;
+        }
+        setControlStatus('reconnecting');
+        reconnectTimer = window.setTimeout(connect, 1000);
+      };
+
+      socket.onerror = () => {
+        socket?.close();
+      };
+    };
+
+    connect();
+
+    return () => {
+      disposed = true;
+      if (reconnectTimer) {
+        window.clearTimeout(reconnectTimer);
+      }
+      socket?.close();
+      controlSocketRef.current = null;
+    };
+  }, []);
+
+  const sendControl = (direction: Direction | 'stop') => {
+    const socket = controlSocketRef.current;
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+      return;
+    }
+    socket.send(direction);
+  };
+
+  const handlePress = (event: PointerEvent<HTMLButtonElement>, direction: Direction) => {
+    event.currentTarget.setPointerCapture(event.pointerId);
+    sendControl(direction);
+  };
+
+  const handleRelease = () => {
+    sendControl('stop');
+  };
+
   const statusLabel =
     status === 'live' ? 'Live' : status === 'connecting' ? 'Connecting' : 'Reconnecting';
+  const controlStatusLabel =
+    controlStatus === 'live'
+      ? 'Live'
+      : controlStatus === 'connecting'
+        ? 'Connecting'
+        : 'Reconnecting';
+
+  const controls = [
+    {
+      key: 'forward',
+      label: 'Forward',
+      arrow: '↑',
+      classes: 'col-start-2 row-start-1',
+    },
+    {
+      key: 'left',
+      label: 'Left',
+      arrow: '←',
+      classes: 'col-start-1 row-start-2',
+    },
+    {
+      key: 'right',
+      label: 'Right',
+      arrow: '→',
+      classes: 'col-start-3 row-start-2',
+    },
+    {
+      key: 'back',
+      label: 'Back',
+      arrow: '↓',
+      classes: 'col-start-2 row-start-3',
+    },
+  ] as const;
 
   return (
     <main className="min-h-screen overflow-hidden bg-[#050816] text-slate-100">
@@ -123,9 +222,39 @@ export default function App() {
                 <p className="mt-1 text-white">ws://localhost:8030/ws</p>
               </div>
               <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                <p className="text-slate-400">Control socket</p>
+                <p className="mt-1 text-white">{controlWebsocketUrl}</p>
+                <p className="mt-1 text-xs text-cyan-100/80">{controlStatusLabel}</p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
                 <p className="text-slate-400">Eye module socket</p>
                 <p className="mt-1 text-white">ws://localhost:3010/ws</p>
               </div>
+            </div>
+
+            <div className="mt-8">
+              <p className="mb-3 text-sm uppercase tracking-[0.32em] text-cyan-200/80">Drive control</p>
+              <div className="mx-auto grid w-full max-w-[14rem] grid-cols-3 grid-rows-3 gap-2">
+                {controls.map((control) => (
+                  <button
+                    key={control.key}
+                    type="button"
+                    className={`${control.classes} touch-none select-none rounded-2xl border border-cyan-200/20 bg-cyan-500/10 p-4 text-center text-white transition hover:bg-cyan-400/20 active:scale-[0.98] active:bg-cyan-300/25`}
+                    onPointerDown={(event) => handlePress(event, control.key)}
+                    onPointerUp={handleRelease}
+                    onPointerCancel={handleRelease}
+                    onPointerLeave={handleRelease}
+                  >
+                    <div className="text-2xl leading-none">{control.arrow}</div>
+                    <div className="mt-1 text-xs uppercase tracking-[0.2em] text-cyan-100/80">
+                      {control.label}
+                    </div>
+                  </button>
+                ))}
+              </div>
+              <p className="mt-3 text-xs text-slate-400">
+                Press and hold to move. Releasing the button sends <span className="text-white">stop</span>.
+              </p>
             </div>
           </aside>
         </section>
